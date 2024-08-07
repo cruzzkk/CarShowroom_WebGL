@@ -6,6 +6,7 @@
   <title>Unity WebGL Player | Car showroom</title>
   <link rel="shortcut icon" href="TemplateData/favicon.ico">
   <link rel="stylesheet" href="TemplateData/style.css">
+  <!-- Include the pako library for gzip decompression -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.3/pako.min.js"></script>
 </head>
 <body>
@@ -53,15 +54,54 @@
     var buildUrl = "Build";
     var loaderUrl = buildUrl + "/Build.loader.js";
     var config = {
-      dataUrl: buildUrl + "/Build.data.gz",
-      frameworkUrl: buildUrl + "/Build.framework.js.gz",
-      codeUrl: buildUrl + "/Build.wasm.gz",
       streamingAssetsUrl: "StreamingAssets",
       companyName: "DefaultCompany",
       productName: "Car showroom",
       productVersion: "0.1.0",
       showBanner: unityShowBanner,
     };
+
+    function fetchAndDecompress(url) {
+      return fetch(url).then(response => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.arrayBuffer();
+      }).then(buffer => {
+        return pako.ungzip(buffer);
+      }).then(decompressed => {
+        return new TextDecoder('utf-8').decode(decompressed);
+      });
+    }
+
+    Promise.all([
+      fetchAndDecompress(buildUrl + "/Build.framework.js.gz"),
+      fetchAndDecompress(buildUrl + "/Build.data.gz"),
+      fetchAndDecompress(buildUrl + "/Build.wasm.gz")
+    ]).then(([frameworkJs, data, wasm]) => {
+      config.frameworkUrl = URL.createObjectURL(new Blob([frameworkJs], { type: 'application/javascript' }));
+      config.dataUrl = URL.createObjectURL(new Blob([data]));
+      config.codeUrl = URL.createObjectURL(new Blob([wasm], { type: 'application/wasm' }));
+
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config, (progress) => {
+          progressBarFull.style.width = 100 * progress + "%";
+        }).then((unityInstance) => {
+          loadingBar.style.display = "none";
+          fullscreenButton.onclick = () => {
+            unityInstance.SetFullscreen(1);
+          };
+        }).catch((message) => {
+          alert(message);
+        });
+      };
+      document.body.appendChild(script);
+    }).catch((error) => {
+      console.error('Error fetching or decompressing:', error);
+      unityShowBanner('Error loading content. Check console for more details.', 'error');
+    });
 
     if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
       var meta = document.createElement('meta');
@@ -77,22 +117,6 @@
     }
 
     loadingBar.style.display = "block";
-
-    var script = document.createElement("script");
-    script.src = loaderUrl;
-    script.onload = () => {
-      createUnityInstance(canvas, config, (progress) => {
-        progressBarFull.style.width = 100 * progress + "%";
-      }).then((unityInstance) => {
-        loadingBar.style.display = "none";
-        fullscreenButton.onclick = () => {
-          unityInstance.SetFullscreen(1);
-        };
-      }).catch((message) => {
-        alert(message);
-      });
-    };
-    document.body.appendChild(script);
   </script>
 </body>
 </html>
