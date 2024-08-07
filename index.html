@@ -61,23 +61,26 @@
       showBanner: unityShowBanner,
     };
 
-    function fetchAndDecompress(url) {
+    function fetchAndDecompress(url, isBinary) {
       return fetch(url).then(response => {
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
         return response.arrayBuffer();
       }).then(buffer => {
-        return pako.ungzip(buffer);
-      }).then(decompressed => {
-        return new TextDecoder('utf-8').decode(decompressed);
+        var decompressed = pako.ungzip(new Uint8Array(buffer));
+        if (isBinary) {
+          return decompressed.buffer;
+        } else {
+          return new TextDecoder('utf-8').decode(decompressed);
+        }
       });
     }
 
     Promise.all([
-      fetchAndDecompress(buildUrl + "/Build.framework.js.gz"),
-      fetchAndDecompress(buildUrl + "/Build.data.gz"),
-      fetchAndDecompress(buildUrl + "/Build.wasm.gz")
+      fetchAndDecompress(buildUrl + "/Build.framework.js.gz", false),
+      fetchAndDecompress(buildUrl + "/Build.data.gz", true),
+      fetchAndDecompress(buildUrl + "/Build.wasm.gz", true)
     ]).then(([frameworkJs, data, wasm]) => {
       config.frameworkUrl = URL.createObjectURL(new Blob([frameworkJs], { type: 'application/javascript' }));
       config.dataUrl = URL.createObjectURL(new Blob([data]));
